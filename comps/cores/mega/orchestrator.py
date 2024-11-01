@@ -12,7 +12,7 @@ from typing import Dict, List
 import aiohttp
 import requests
 from fastapi.responses import StreamingResponse
-from prometheus_client import Histogram
+from prometheus_client import Histogram, Gauge
 from pydantic import BaseModel
 
 from ..proto.docarray import LLMParams
@@ -33,6 +33,7 @@ class OrchestratorMetrics:
     first_token_latency = Histogram("megaservice_first_token_latency", "First token latency (histogram)")
     inter_token_latency = Histogram("megaservice_inter_token_latency", "Inter-token latency (histogram)")
     request_latency = Histogram("megaservice_request_latency", "Whole request/reply latency (histogram)")
+    request_pending = Gauge("megaservice_request_pending", "Count of currently pending requests (gauge)")
 
     def __init__(self) -> None:
         pass
@@ -47,6 +48,12 @@ class OrchestratorMetrics:
 
     def request_update(self, req_start: float) -> None:
         self.request_latency.observe(time.time() - req_start)
+
+    def pending_update(self, increase: bool) -> None:
+        if increase:
+            self.request_pending.inc()
+        else:
+            self.request_pending.dec()
 
 
 class ServiceOrchestrator(DAG):
@@ -184,8 +191,10 @@ class ServiceOrchestrator(DAG):
             or self.services[cur_node].service_type == ServiceType.LVM
         ) and llm_parameters.streaming:
             # Still leave to sync requests.post for StreamingResponse
+            self.metrics.pending_update(True)
             if LOGFLAG:
                 logger.info(inputs)
+
             response = requests.post(
                 url=endpoint,
                 data=json.dumps(inputs),
@@ -234,6 +243,7 @@ class ServiceOrchestrator(DAG):
                                 token_start = self.metrics.token_update(token_start, is_first)
                             is_first = False
                     self.metrics.request_update(req_start)
+                    self.metrics.pending_update(False)
 
             return (
                 StreamingResponse(self.align_generator(generate(), **kwargs), media_type="text/event-stream"),
