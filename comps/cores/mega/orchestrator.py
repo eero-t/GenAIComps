@@ -12,7 +12,7 @@ from typing import Dict, List
 import aiohttp
 import requests
 from fastapi.responses import StreamingResponse
-from prometheus_client import Histogram, Gauge
+from prometheus_client import Gauge, Histogram
 from pydantic import BaseModel
 
 from ..proto.docarray import LLMParams
