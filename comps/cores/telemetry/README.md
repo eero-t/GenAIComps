@@ -48,11 +48,11 @@ Applications' megaservice `ServiceOrchectrator` provides following metrics:
 - `megaservice_first_token_latency`: time to first token (TTFT)
 - `megaservice_inter_token_latency`: inter-token latency (ITL ~ TPOT)
 - `megaservice_request_latency`: whole request E2E latency = TTFT + ITL \* tokens
-- `megaservice_request_pending`: how many LLM requests are still in progress
+- `megaservice_incoming_request_total`: total counter for incoming application requests
 
 Latency ones are histogram metrics i.e. include count, total value and set of value buckets for each item.
 
-They are available only for _stream_ requests using LLM. Pending count accounts for all requests.
+They are available only for _stream_ requests using LLM. Incoming count accounts for all requests.
 
 ### Inferencing Metrics
 

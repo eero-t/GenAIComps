@@ -12,7 +12,7 @@ from typing import Dict, List
 import aiohttp
 import requests
 from fastapi.responses import StreamingResponse
-from prometheus_client import Gauge, Histogram
+from prometheus_client import Counter, Histogram
 from pydantic import BaseModel
 
 from ..proto.docarray import LLMParams
@@ -38,7 +38,7 @@ class OrchestratorMetrics:
         else:
             self._prefix = "megaservice"
 
-        self.request_pending = Gauge(f"{self._prefix}_request_pending", "Count of currently pending requests (gauge)")
+        self.request_total = Counter(f"{self._prefix}_incoming_request_total", "Total count of incoming requests (counter)")
 
         # Metrics related to token processing are created on demand,
         # to avoid bogus ones for services that never handle tokens
@@ -74,11 +74,9 @@ class OrchestratorMetrics:
     def _request_update_real(self, req_start: float) -> None:
         self.request_latency.observe(time.time() - req_start)
 
-    def pending_update(self, increase: bool) -> None:
-        if increase:
-            self.request_pending.inc()
-        else:
-            self.request_pending.dec()
+    def incoming_update(self: bool) -> None:
+        "increase incoming requests counter metric"
+        self.request_total.inc()
 
 
 class ServiceOrchestrator(DAG):
@@ -107,7 +105,7 @@ class ServiceOrchestrator(DAG):
 
     async def schedule(self, initial_inputs: Dict | BaseModel, llm_parameters: LLMParams = LLMParams(), **kwargs):
         req_start = time.time()
-        self.metrics.pending_update(True)
+        self.metrics.incoming_update()
 
         result_dict = {}
         runtime_graph = DAG()
@@ -177,9 +175,6 @@ class ServiceOrchestrator(DAG):
         for node in all_nodes:
             if node not in nodes_to_keep:
                 runtime_graph.delete_node_if_exists(node)
-
-        if not llm_parameters.stream:
-            self.metrics.pending_update(False)
 
         return result_dict, runtime_graph
 
@@ -266,7 +261,6 @@ class ServiceOrchestrator(DAG):
                                 yield chunk
                             is_first = False
                     self.metrics.request_update(req_start)
-                    self.metrics.pending_update(False)
 
             return (
                 StreamingResponse(self.align_generator(generate(), **kwargs), media_type="text/event-stream"),
