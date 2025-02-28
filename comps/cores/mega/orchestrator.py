@@ -171,8 +171,10 @@ class ServiceOrchestrator(DAG):
                                 # turn the response to a StreamingResponse
                                 # to make the response uniform to UI
                                 def fake_stream(text):
+                                    self.metrics.token_update(req_start, True)
                                     yield "data: b'" + text + "'\n\n"
                                     yield "data: [DONE]\n\n"
+                                    self.metrics.request_update(req_start)
 
                                 result_dict[node] = StreamingResponse(
                                     fake_stream(response["text"]), media_type="text/event-stream"
