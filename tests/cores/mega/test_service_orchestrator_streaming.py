@@ -81,21 +81,20 @@ class TestServiceOrchestratorStreaming(unittest.IsolatedAsyncioTestCase):
 
         metrics = {}
         for line in lines:
-            if line.startswith("mega") and "_count" in line:
+            if line.startswith("mega") and ("_count" in line or "_pending" in line):
                 items = line.split()
                 self.assertTrue(len(items), 2)
                 name, value = items
-
-                self.assertTrue(name.startswith("megaservice_"))
-                self.assertTrue(name.endswith("_count"))
                 metrics[name] = int(float(value))
         print(metrics)
 
         all_tokens = len(res_expected)
-        # After proper orchestrator request processing:
+        # After request is processed:
         # - first tokens count should be equal to request count
         # - inter tokens count should not include first token
+        # - pending requests should have gone back to zero
         correct = {
+            "megaservice_request_pending": 0,
             "megaservice_request_latency_count": 1,
             "megaservice_first_token_latency_count": 1,
             "megaservice_inter_token_latency_count": all_tokens - 1,
