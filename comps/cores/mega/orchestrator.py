@@ -128,6 +128,7 @@ class ServiceOrchestrator(DAG):
     async def schedule(self, initial_inputs: Dict | BaseModel, llm_parameters: LLMParams = LLMParams(), **kwargs):
         req_start = time.time()
         self.metrics.pending_update(True)
+        had_llm = False
 
         result_dict = {}
         runtime_graph = DAG()
@@ -187,6 +188,9 @@ class ServiceOrchestrator(DAG):
                                     )
                                 )
                             )
+                            # check whether LLM query will be execute()d, i.e. whether request count
+                            # would decrement once (async) processing of all the LLM tokens finishes
+                            had_llm = had_llm or (self.services[d_node].service_type in (ServiceType.LLM, ServiceType.LVM))
         nodes_to_keep = []
         for i in ind_nodes:
             nodes_to_keep.append(i)
@@ -198,7 +202,7 @@ class ServiceOrchestrator(DAG):
             if node not in nodes_to_keep:
                 runtime_graph.delete_node_if_exists(node)
 
-        if not llm_parameters.stream:
+        if (not llm_parameters.stream) or (not had_llm):
             self.metrics.pending_update(False)
 
         return result_dict, runtime_graph
@@ -315,7 +319,7 @@ class ServiceOrchestrator(DAG):
                                 yield chunk
 
                     self.metrics.request_update(req_start)
-                    self.metrics.pending_update(False)
+                self.metrics.pending_update(False)
 
             return (
                 StreamingResponse(self.align_generator(generate(), **kwargs), media_type="text/event-stream"),
